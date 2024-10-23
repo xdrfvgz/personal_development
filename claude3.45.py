@@ -62,14 +62,68 @@ Befolgen Sie diese Richtlinien:
         """Fügt eine neue Nachricht zur Konversationshistorie hinzu."""
         self.conversation_history.append(Message(role=role, content=content))
 
-    def extract_command(self, text: str) -> Optional[str]:
-        """Extrahiert den Befehl zwischen [cmd] und [/cmd] Tags."""
+    def extract_commands(self, text: str) -> List[str]:
+    """Extrahiert alle Befehle zwischen [cmd] und [/cmd] Tags."""
+    commands = []
+    start = 0
+    while True:
         try:
-            start = text.index("[cmd]") + 5
-            end = text.index("[/cmd]")
-            return text[start:end].strip()
+            start = text.index("[cmd]", start) + 5
+            end = text.index("[/cmd]", start)
+            commands.append(text[start:end].strip())
+            start = end + 6
         except ValueError:
-            return None
+            break
+    return commands
+
+def run(self):
+    """Hauptschleife des Assistenten."""
+    self.console.print(Panel.fit(
+        "Kommandozeilen-Assistent\n"
+        "Befehle: exit, save, load <datei>, history"
+    ))
+
+    while True:
+        try:
+            user_input = Prompt.ask("\n[bold green]>[/bold green]")
+
+            if not user_input.strip():
+                continue
+
+            if user_input == "exit":
+                self.console.print(Text("Auf Wiedersehen!", style="yellow"))
+                break
+            elif user_input == "save":
+                self.save_conversation()
+                continue
+            elif user_input == "history":
+                self.show_history()
+                continue
+            elif user_input.startswith("load "):
+                self.load_conversation(user_input[5:].strip())
+                continue
+
+            # Füge Benutzereingabe zur Historie hinzu
+            self.add_to_history("user", user_input)
+
+            # Hole Antwort von der API
+            response = self.get_response(user_input)
+            self.print_labeled("Assistant:", Markdown(response))
+            self.add_to_history("assistant", response)
+
+            # Extrahiere und führe Befehle aus
+            commands = self.extract_commands(response)
+            for command in commands:
+                self.print_labeled("Befehl:", command, "bold yellow")
+                output = self.execute_command(command)
+                self.print_labeled("Ausgabe:", output, "bold yellow")
+                self.add_to_history("user", f"Befehl ausgeführt: {command}\nAusgabe: {output}")
+
+        except KeyboardInterrupt:
+            self.console.print(Text("\nBeenden mit 'exit'", style="yellow"))
+        except Exception as e:
+            self.print_error(str(e))
+            self.console.print_exception()
 
     def execute_command(self, command: str) -> str:
         """Führt einen Befehl direkt aus."""
